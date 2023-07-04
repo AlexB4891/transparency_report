@@ -72,10 +72,11 @@ cpi %>%
 
 ## Step 1: Core sample
 
-Two criteria:
+Three criteria:
 
-1.  Active in 2014: Firms that have fille C.I.T & positive income
-2.  Has filled at least once the APS in 2012-2014
+1.  Active in 2014: Firms that have fille C.I.T 
+2.  Positive income in 2014
+3.  Has filled at least once the APS in 2012-2014
 
 ```{r}
 
@@ -127,68 +128,69 @@ Now we have the number of firms according to their revenues and their declaratio
 
 ```{r}
 
-revenues <- tabla %>% 
+# Filter the core sample just for pre period:
+core_12_14 <- tabla %>% 
   filter(anio_fiscal <= 2014) %>% 
   inner_join(core_sample) %>% 
   mutate(non_cero_income = as.numeric(total_income > 0),
-         cero_income = as.numeric(total_income == 0)) %>% 
-  # filter(cero_income,
-  #        # active_2014 == 1,
-  #        anio_fiscal == 2014)
-    
+         cero_income = as.numeric(total_income == 0)) 
+
+# Count how many firms has zero revenues and positive revenues (yearly)
+revenues <- core_12_14 %>% 
   group_by(anio_fiscal) %>% 
   summarise(across(.cols = c(non_cero_income,
                              cero_income),
                    .fns = ~sum(.x,na.rm = T)))
 
+# How many firms has no APS (yearly):
 summary_pre <- tabla %>% 
   inner_join(absent_aps) %>% 
   group_by(anio_fiscal) %>% 
   summarise(no_aps = n_distinct(identificacion_informante_anon)) %>% 
   inner_join(revenues)
 
+# How many firms has no APS in all three years:
 global_pre_1 <- tabla %>% 
   filter(anio_fiscal <=2014) %>% 
   inner_join(absent_aps) %>% 
   summarise(no_aps = n_distinct(identificacion_informante_anon))
 
-global_pre_2 <- tabla %>% 
-  filter(anio_fiscal <=2014) %>% 
-  inner_join(core_sample) %>% 
-  mutate(non_cero_income = total_income > 0,
-         cero_income = total_income == 0)
-
+# Make the global summary:
 summ_row <- bind_cols(
-  global_pre_2 %>% 
+  core_12_14 %>% 
     group_by(non_cero_income) %>% 
     summarise(positive = n_distinct(identificacion_informante_anon)) %>% 
-    filter(non_cero_income) %>% 
+    filter(non_cero_income == 1) %>% 
     select(-non_cero_income,
            non_cero_income = positive),
   
-  global_pre_2 %>% 
+  core_12_14 %>% 
     group_by(cero_income) %>% 
     summarise(cero = n_distinct(identificacion_informante_anon)) %>% 
-    filter(cero_income) %>% 
+    filter(cero_income == 1) %>% 
     select(-cero_income,
            cero_income = cero),
   
   global_pre_1
 )
 
+# Decorate the table of global summary:
 summ_row <- summ_row %>% 
   mutate(stat = "Unique firms",
          anio_fiscal = "N (2012-2014)")
 
 
+# Decorate the yearly table:
 first_count <- summary_pre %>% 
   mutate(
     anio_fiscal = as.character(anio_fiscal),
     stat = "Pre reform period") %>% 
   bind_rows(summ_row)
 
+# Save temporal output:
 write_tsv(first_count,"new_first_group.txt")
 
+# Print table:
 first_count %>% 
   group_by(stat) %>% 
   gt() %>% 
@@ -211,7 +213,7 @@ In the previous table, the year 2014 is highlighted in blue because we **constru
 We will compare firms that have and does not have APS between the pre and post period (the values show the mean in each period, the counts are considering unique firms across the years of each period):
 
 ```{r}
-stats_aps <- tabla %>% 
+tabla_deflact <- tabla %>% 
   # Unir los activos:
   inner_join(active_2014) %>% 
   # Agregar marca sin APS:
@@ -219,8 +221,18 @@ stats_aps <- tabla %>%
               rename(sin_aps = active_2014)) %>% 
   # Llevar los valores a precios constantes:
   mutate(across(c(total_sales,total_income,tax_liability),
-                ~.x/deflactor)) %>% 
+                ~.x/deflactor)) 
+
+# Tabla solo para el 2014:
+tabla_deflact_14 <- tabla_deflact %>% 
+  filter(anio_fiscal == 2014) %>% 
+  mutate(post = 2)
+
+stats_aps <- tabla_deflact %>% 
+  bind_rows(tabla_deflact_14) %>% 
+  # Agrupamos por post y falta de APS:
   group_by(post,sin_aps) %>% 
+  # Resumenes a nivel de variable-periodo:
   summarise(n = n_distinct(identificacion_informante_anon),
             mean_sales = mean(total_sales,na.rm = T),
             sd_sales = sd(total_sales,na.rm = T),
@@ -231,16 +243,20 @@ stats_aps <- tabla %>%
             mean_tax_liability = mean(tax_liability,na.rm = T),
             sd_tax_liability = sd(tax_liability,na.rm = T),
             median_tax_liability = median(tax_liability,na.rm = T)) %>% 
+  # Formato largo:
   pivot_longer(cols = c(matches("^mean"),
                         matches("^median"),
                         matches("^sd"),
                         n),
                names_to = "variables",
                values_to = "valores") %>% 
+  # Algunas modificaciones sobre las variables y factores:
   mutate(sin_aps = replace_na(sin_aps,0),
          sin_aps = factor(sin_aps,c(0,1),c("APS declared","APS absent")),
-         post = factor(post,c(0,1),c("Pre reform","Post reform"))) %>% 
+         post = factor(post,c(2,0,1),c("Year = 2014","Pre reform","Post reform"))) %>% 
+  # Cambio a formato ancho:
   pivot_wider(names_from = sin_aps,values_from = valores) %>% 
+  # Últimos cambios sobre las variables:
   mutate(variables = factor(variables,levels = c("n",
                                                  "mean_sales",
                                                  "median_sales",
@@ -266,15 +282,74 @@ stats_aps <- tabla %>%
                                 scales::number(.x,accuracy = 1),
                                 scales::dollar(.x,big.mark = " "))))
 
-
+# Guardar resumen temporal:
 write_tsv(stats_aps,"new_stats_group.txt")
 
+# Impresión de la tabla:
 stats_aps %>% 
   group_by(post) %>% 
   arrange(variables) %>% 
   gt() %>% 
   cols_label(variables = "") 
 ```
+
+#### Distributions of `log(sales)` between firms with or without APS annex declared
+
+```{r}
+
+# For year = 2014: calculate the log sales:
+# Add some factors:
+dist_df <- 
+  tabla_deflact_14 %>% 
+  mutate(sin_aps = replace_na(sin_aps,0),
+         sin_aps = factor(sin_aps,c(0,1),c("APS declared","APS absent")),
+         post = factor(post,c(2,0,1),c("Year = 2014","Pre reform","Post reform"))) %>% 
+  mutate(
+    positive_sales = if_else(total_sales == 0, NA_real_,1),
+    log_sales = log(total_sales*positive_sales))
+
+# Statistics of groups:
+stat_df <- dist_df %>% 
+  group_by(sin_aps) %>% 
+  summarise(
+    firms = n_distinct(identificacion_informante_anon),
+    positive = sum(positive_sales,na.rm = T),
+    mean = mean(log_sales,na.rm = T),
+    mean_t = mean(total_sales))
+
+# Plot of the distributions:
+dist_df %>% 
+  ggplot() +
+  geom_histogram(aes(x = log_sales,fill = sin_aps),alpha = 0.6) + 
+  geom_vline(data = stat_df,aes(xintercept = mean)) +
+  facet_grid(sin_aps ~ .,scales = "free") +
+  scale_y_continuous(labels = ~number(.x,accuracy = 1)) +
+  theme_minimal() +
+  labs(title = "Comparative distributions between firms with and without APS annex",
+       subtitle = "Only positive sales in 2014",
+       caption = "The scale of Y axis is adjusted to improve readability. The vertical line shows the mean of each distribution. In the following table there's a summary to complement this graphic.")
+```
+
+Statistics to understand the both distribution:
+
+```{r}
+
+stat_df %>% 
+  mutate(firms = number(firms,big.mark = " ",accuracy = 1),
+        positive = number(positive,big.mark = " ",accuracy = 1),
+        mean = number(mean, big.mark = " ",accuracy = 0.001,decimal.mark = "."),
+        mean_t = dollar(mean_t, big.mark = " ",accuracy = 0.01,decimal.mark = ".")) %>% 
+  pivot_longer(-sin_aps) %>% 
+  pivot_wider(names_from = sin_aps,values_from = value) %>% 
+  mutate(name = factor(name,
+                       c("firms","positive","mean","mean_t"),
+                       c("N (Firms)","Firms with positive sales","Mean log(Sales)","Mean sales USD"))) %>% 
+  gt() %>% 
+  cols_label(name = "",
+             `APS declared` = md("**APS declared**"),
+             `APS absent` = md("**APS absent**"))
+```
+
 
 ## Step 2: groups within core sample
 
@@ -290,8 +365,11 @@ stats_aps %>%
 #### Number of firms in each assign group
 
 ```{r}
-tabla_core <- tabla %>% 
+
+# Asignación de grupo de acuerdo al año 2014:
+assign_2014 <- tabla %>% 
   inner_join(core_sample) %>% 
+  filter(anio_fiscal == 2014) %>% 
   mutate(
     across(c(porcentaje_aps_pff,porcentaje_aps_ext,porcentaje_aps_nac),
            ~if_else(.x > 100,100,.x)),
@@ -303,7 +381,13 @@ tabla_core <- tabla %>%
         porcentaje_aps_ext > 5 & porcentaje_aps_ext < 50 & porcentaje_aps_pff < 5 ~ "C-Min",
         porcentaje_aps_nac > 95 & porcentaje_aps_pff < 5 ~ "C-Domestic",
         TRUE ~ "Domestic"
-  )) 
+  )) %>% 
+  select(identificacion_informante_anon,group_assign)
+
+# Unión de la asignación, la core y la core sample:
+tabla_core <- tabla %>% 
+  inner_join(core_sample) %>% 
+  left_join(assign_2014)
 
 summ_group <- tabla_core  %>% 
   filter(anio_fiscal == 2014) %>%
@@ -355,7 +439,25 @@ fila_2 <- summ_group %>%
                 .fns = ~percent(.x/nrow(core_sample),accuracy = 0.01)))
 
 
-bind_rows(fila_1,fila_2)%>% 
+weigthed <- tabla_core  %>% 
+  filter(anio_fiscal == 2014) %>%
+  group_by(anio_fiscal,
+           group_assign) %>% 
+  summarise(sum_sales = sum(total_sales,na.rm = T),
+            sum_assets = sum(total_assets,na.rm = T)) %>% 
+  ungroup() %>% 
+  mutate(across(matches("sum_"),~.x/sum(.x)),
+         across(matches("sum_"),percent,accuracy = 0.01)) %>% 
+  select(-anio_fiscal) %>% 
+  pivot_longer(-group_assign) %>% 
+  pivot_wider(names_from = group_assign,values_from = value) %>% 
+  rename(label = name ) %>% 
+  mutate(label = if_else(label == "sum_sales",
+                         "Sales weighted proportion",
+                         "Assets weighted proportion"))
+
+
+bind_rows(fila_1,fila_2,weigthed )%>% 
   select(label,everything()) %>% 
   ungroup() %>% 
   gt() %>% 
@@ -679,7 +781,7 @@ compar %>%
 ```
 
 
-### Sub-sample:
+### Sub-samples:
 
 #### Sub sample 1:
 
@@ -709,12 +811,51 @@ resumen_new_aps %>%
   sub_missing(columns = everything(),missing_text = "")
 ```
 
+Classification of firms with "No new APS":
+
+```{r}
+
+
+summ_group %>% 
+  ungroup() %>% 
+  select(-anio_fiscal) %>% 
+  # mutate(label = "Firms in core sample (2014)") %>% 
+  filter(var == "n") %>% 
+  select(-var,-prop) %>% 
+  pivot_longer(
+    cols = everything(),
+    values_to = "Firms in core sample",
+    names_to = "group_assign_2014") %>% 
+  inner_join(compar %>% 
+               filter(is.na(anio_fiscal_post)) %>% 
+               count(group_assign_2014) %>% 
+               rename(`Firms with no new APS` = n ) 
+             ) %>% 
+  mutate(`Proportion of firms with no new APS` = `Firms with no new APS`/`Firms in core sample`,
+        `Firms with no new APS` = number(`Firms with no new APS`,big.mark = " ",accuracy = 1),
+        `Firms in core sample` = number(`Firms in core sample`,big.mark = " ",accuracy = 1),
+        `Proportion of firms with no new APS` = percent(`Proportion of firms with no new APS`,accuracy = 0.001,big.mark = " ")) %>%
+          pivot_longer(-group_assign_2014) %>% 
+  pivot_wider(names_from = group_assign_2014,values_from = value) %>% 
+  gt() %>% 
+  cols_label(
+    name = "",
+    `C-Domestic` = md("**C-Domestic**"),
+    `C-Maj` = md("**C-Maj**"),
+    `C-Min`= md("**C-Min**"),
+    `Domestic` = md("**Domestic**"),
+    `T-Maj` = md("**T-Maj**"),
+    `T-Min` = md("**T-Min**") 
+  ) 
+```
+
+
 Let's take the following definition of change:
 
- -  If ythe Assigned group in 2014 is "T-Maj" & the effective participation in tax haven post reform  is  < 50
- -  If ythe Assigned group in 2014 is "T-Min" & the effective participation in tax haven post reform  is  >= 50 
- -  If ythe Assigned group in 2014 is "C-Maj" & the effective participation in tax haven post reform  is  > 5 
- - If ythe Assigned group in 2014 is "C-Min" & the effective participation in tax haven post reform  is  > 5 
+ -  If the Assigned group in 2014 is "T-Maj" & the effective participation in tax haven post reform  is  < 50
+ -  If the Assigned group in 2014 is "T-Min" & the effective participation in tax haven post reform  is  < 5 
+ -  If the Assigned group in 2014 is "C-Maj" & the effective participation in foreign non tax haven country post reform  is  < 50 
+ - If the Assigned group in 2014 is "C-Min" & the effective participation in foreign non tax haven country post reform is  < 5 
  
 In any other case we assume there's no change in ownership.
 
@@ -736,9 +877,9 @@ compar2 <- tabla_core_p %>%
   inner_join(aps_core_2014) %>% 
   mutate(cambio = case_when(
     group_assign_2014 == "T-Maj" & porcentaje_aps_pff < 50 ~ 1,
-    group_assign_2014 == "T-Min" & porcentaje_aps_pff >= 50 ~ 1,
-    group_assign_2014 == "C-Maj" & porcentaje_aps_pff > 5 ~ 1,
-    group_assign_2014 == "C-Min" & porcentaje_aps_pff > 5 ~ 1,
+    group_assign_2014 == "T-Min" & porcentaje_aps_pff < 5 ~ 1,
+    group_assign_2014 == "C-Maj" & porcentaje_aps_ext < 50 ~ 1,
+    group_assign_2014 == "C-Min" & porcentaje_aps_ext < 5 ~ 1,
     TRUE ~ 0
   ))
 
@@ -760,6 +901,47 @@ compar2 %>%
   ) 
 ```
 
+We also check any changes in the percentages of participation in each residence:
+
+- Considering the pivot year 2014
+- Considering the first APS declared in the post period
+- We check if each of the participation (domestic, foreign, tax haven) has any change respect to the pivot year
+
+```{r}
+
+compar3 <- tabla_core_p %>% 
+  filter(anio_fiscal >= 2015) %>% 
+  right_join(completos) %>% 
+  fill(everything(),.direction = "down") %>% 
+  filter(anio_fiscal >= primera) %>% 
+  inner_join(aps_core_2014) %>% 
+  mutate(
+    cambio_pff  = as.numeric(abs(porcentaje_aps_pff - porcentaje_aps_pff_2014) > 0.05),
+    cambio_ext = as.numeric(abs(porcentaje_aps_ext - porcentaje_aps_ext_2014) > 0.05),
+    cambio_nac = as.numeric(abs(porcentaje_aps_nac - porcentaje_aps_nac_2014) > 0.05),
+    indicador_cambio = cambio_pff + cambio_ext + cambio_nac,
+    cambio = as.numeric(indicador_cambio > 0))
+
+compar3 %>% 
+  group_by(anio_fiscal,group_assign_2014) %>% 
+  summarise(cambio = sum(cambio,na.rm = T)) %>% 
+  pivot_wider(names_from = group_assign_2014,
+              values_from = cambio) %>% 
+  ungroup() %>% 
+  gt() %>% 
+  cols_label(
+    anio_fiscal = "",
+    `C-Domestic` = md("**C-Domestic**"),
+    `C-Maj` = md("**C-Maj**"),
+    `C-Min`= md("**C-Min**"),
+    `Domestic` = md("**Domestic**"),
+    `T-Maj` = md("**T-Maj**"),
+    `T-Min` = md("**T-Min**") 
+  ) 
+
+```
+
+
 How many firms have decreased the tax haven participation by 5%? How many reduced their tax haven participation to 0?
 
 ```{r}
@@ -767,8 +949,8 @@ compar2 %>%
   ungroup() %>% 
   mutate(
     diferencia_pff = porcentaje_aps_pff_2014 - porcentaje_aps_pff,
-    dummy_change_5ff = as.numeric(diferencia_pff > 5),
-    dummy_change_0ff = as.numeric(porcentaje_aps_pff == 0 & porcentaje_aps_pff_2014 >0)
+    dummy_change_5ff = as.numeric(diferencia_pff > 4.95),
+    dummy_change_0ff = as.numeric(porcentaje_aps_pff <= 0.05 & porcentaje_aps_pff_2014 >0)
   ) %>% 
   group_by(anio_fiscal,group_assign_2014) %>% 
   summarise(cambio5 = sum(dummy_change_5ff,na.rm = T),
@@ -810,7 +992,7 @@ ids_profit <- tabla_core %>%
 
 tasas <- tabla_core %>% 
   select(anio_fiscal,identificacion_informante_anon,tasa_ir,tasa_vigente) %>% 
-  mutate(diferencia_tasa =tasa_ir - tasa_vigente )
+  mutate(diferencia_tasa = tasa_ir - tasa_vigente )
 
 compar2 %>%
   inner_join(ids_profit) %>% 
@@ -820,7 +1002,7 @@ compar2 %>%
       porcentaje_aps_pff < 50 ~ 0.03*porcentaje_aps_pff,
       porcentaje_aps_pff >= 50 ~ 0.03,
       TRUE ~ 0.03),
-    indicador = as.numeric(predicted_tasa == diferencia_tasa)
+    indicador = as.numeric(between(predicted_tasa - diferencia_tasa,-0.005,0.005))
   ) %>% 
   group_by(anio_fiscal,group_assign_2014) %>% 
   summarise(cambio = sum(indicador,na.rm = T)) %>% 
@@ -844,4 +1026,87 @@ compar2 %>%
 
 ```
 
+#### Placebo 
+
+We compare the years  2013 and 2014 to the pivot year 2012:
+
+Changes in 2013:
+
+
+    - If the group assigned in 2012 is "T-Maj" & the effective participation in tax havens in 2013 is < 50
+    - If the group assigned in 2012 is "T-Min" & the effective participation in tax havens in 2013 is < 5
+    - If the group assigned in 2012 is "C-Maj" & the effective participation in non tax havens in 2013 is < 50 
+    - If the group assigned in 2012 is "C-Min" & the effective participation in non tax havens in 2013 is < 5 
+    - Either case we assume no change between 2012 and 2013.
+      
+Changes in 2014:
+
+
+    - If the group assigned in 2012 is "T-Maj" & the effective participation in tax havens in 2014 is < 50
+    - If the group assigned in 2012 is "T-Min" & the effective participation in tax havens in 2014 is < 5
+    - If the group assigned in 2012 is "C-Maj" & the effective participation in non tax havens in 2014 is < 50 
+    - If the group assigned in 2012 is "C-Min" & the effective participation in non tax havens in 2014 is < 5 
+    - Either case we assume no change between 2012 and 2014.
+    
+By contruction all values of changein 2014 is zero. 
+
+```{r}
+aps_core_2012 <- tabla_core_p %>% 
+  filter(anio_fiscal == 2012)
+
+aps_core_2012 <- aps_core_2012 %>% 
+  rename_with(.cols = -identificacion_informante_anon,
+              ~str_c(.x,"_2012"))
+
+
+aps_core_2013 <- tabla_core_p %>% 
+  filter(anio_fiscal == 2013)
+
+aps_core_2013 <- aps_core_2013 %>% 
+  rename_with(.cols = -identificacion_informante_anon,
+              ~str_c(.x,"_2013"))
+
+compar4 <- list(aps_core_2014,
+     aps_core_2013,
+     aps_core_2012) %>% 
+  reduce(full_join)
+
+compar4 %>% 
+  mutate(
+    cambio_2013 = case_when(
+      group_assign_2012 == "T-Maj" & porcentaje_aps_pff_2013 < 50 ~ 1,
+      group_assign_2012 == "T-Min" & porcentaje_aps_pff_2013 < 5 ~ 1,
+      group_assign_2012 == "C-Maj" & porcentaje_aps_ext_2013 < 50 ~ 1,
+      group_assign_2012 == "C-Min" & porcentaje_aps_ext_2013 < 5 ~ 1,
+      TRUE ~ 0
+    ),
+    cambio_2014 = case_when(
+      group_assign_2012 == "T-Maj" & porcentaje_aps_pff_2014 < 50 ~ 1,
+      group_assign_2012 == "T-Min" & porcentaje_aps_pff_2014 < 5 ~ 1,
+      group_assign_2012 == "C-Maj" & porcentaje_aps_ext_2014 < 50 ~ 1,
+      group_assign_2012 == "C-Min" & porcentaje_aps_ext_2014 < 5 ~ 1,
+      TRUE ~ 0
+    )) %>% 
+  group_by(group_assign_2012) %>% 
+  summarise(cambios_2013 = sum(cambio_2013,na.rm = T),
+            cambios_2014 = sum(cambio_2014,na.rm = T)) %>% 
+  pivot_longer(-group_assign_2012) %>% 
+  filter(!is.na(group_assign_2012)) %>% 
+  pivot_wider(names_from = group_assign_2012,
+              values_from = value) %>% 
+  mutate(name = str_replace(name,"_"," ") %>% str_to_title()) %>% 
+  gt() %>% 
+  cols_label(
+    name = "",
+    `C-Domestic` = md("**C-Domestic**"),
+    `C-Maj` = md("**C-Maj**"),
+    `C-Min`= md("**C-Min**"),
+    `Domestic` = md("**Domestic**"),
+    `T-Maj` = md("**T-Maj**"),
+    `T-Min` = md("**T-Min**") 
+  ) 
+
+
+
+```
 
