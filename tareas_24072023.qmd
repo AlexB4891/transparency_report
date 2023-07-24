@@ -1,0 +1,40 @@
+---
+title: "Tareas 24/07/2023"
+format: html
+editor: visual
+---
+
+Vamos a crear referencias entre las tablas. Para ir acomodando el texto.
+
+Resumen de hallazgos
+
+Escribir texto para paper:
+
+-   contexto y motivpos de la politica fiscal
+
+-   lucha contra paraisos fiscales
+
+-   Descripcion de los datos
+
+En la tabla de revenue growth:
+
+-   Poner un intervalo para la diferencia
+
+En Classification of firms with "No new APS":
+
+-   Añadir el total en una columna
+
+En "Let's take the following definition of change:" tenemos los cambios generales dentro de los grupos, este sería el total que vamos a desagregar con las tablas, de multados, no multados los que siguen o no la tasa estimada predicha
+
+En subsample 2 hacer
+
+-   la columna de totales y
+-   proporcion de las empresas clasificadas en 2014\
+
+Hacer las tablas de comparación de las multas y coherencia de las tasas predichas y estimadas.
+
+-   Hacer referencias a tablas anteriores
+
+-   Anotar columnas con footnotes
+
+-   distribuciones grafico de los cambio en la tasa 2014 y primer año del post presente
