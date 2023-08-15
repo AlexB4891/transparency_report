@@ -1,0 +1,84 @@
+---
+title: "Tareas 31/07/2023"
+format: html
+editor: visual
+---
+
+## Tareas respecto al reporte
+
+1.  Estadísticas respecto al porcentaje declarado de participación de las empresas que tienen el APS incompleto (listo 04082023)
+2.  Añadir proporciones en las tablas en que se hace el conteo, sobre todo en las que describen al T-Min, T-Maj y C-Min, C-Maj. C-Domestic (listo 04082023)
+3.  En general revisar que todas las tablas tengan proporción y conteo
+4.  Histogramas (post):
+    1.  Cambio relativo con base en 2014 (x/lag - 1)
+
+    2.  En nivel de diferencia
+5.  Histogramas (placebo):
+    1.  Cambio relativo con base en 2013 y 2014 con base 2012(x/lag - 1)
+
+    2.  En nivel de diferencia
+
+## 
+
+Tareas respecto al contexto
+
+Terminar código de extracción de noticias:
+
+1.  Pasar a pandas el resultado de la colección de noticias
+2.  En la función para hallar el número de hojas por año mes terminar la transformación de elementos con un for
+3.  Ejecutar para los años
+4.  Hacer una serie de dimmies para encontrar palabras clave:
+    1.  Reforma tributaria
+
+    2.  Impuesto a la renta para sociedades
+
+    3.  Anexo APS
+
+    4.  Paraisos fiscales
+
+    5.  Evasión y elusión fiscal
+
+    6.  Transparencia
+
+    7.  SRI
+
+Solo faltan:
+
+-    las tablas de C-Min
+
+-   histogramas
+
+-   referencias de tablas
+
+-   comentarios
+
+Estado 04082023:
+
+-   f102_mid_taxhavenhouse.do finalizo sin problemas
+
+-   f102_connected_individuals_mid_entrances_quarter.do finalizo sin problemas
+
+-   masterdo_20230801_a.do finalizo sin problemas
+
+-   masterdo_20230801_b.d finalizo con el mensaje:
+
+    -   variable gross_income_preperiod not found
+
+-   En: D:\\BM_EXTENSION\\B202106_JAKOB_BROUNSTEIN\\tables\\connected_individuals\\202308\\individuals\\descriptive\\ranks
+
+    no hay archivos, estan en:
+
+    D:\\BM_EXTENSION\\B202106_JAKOB_BROUNSTEIN\\tables\\connected_individuals\\202308\\individuals\\descriptive\\
+
+-   En: \
+    D:\\BM_EXTENSION\\B202106_JAKOB_BROUNSTEIN\\graphs\\connected_individuals\\202308\\individuals\\descriptive\
+    solo hay la carpeta ranks/\
+    ambas estan vacias.
+
+-   En:
+
+    D:\\BM_EXTENSION\\B202106_JAKOB_BROUNSTEIN\\tables\\connected_individuals\\202308\\individuals\\descriptive
+
+    A parte de los ranks y ranks_detailed solo hay \
+
+    ind_con_allgroups_descriptive_all.tex
